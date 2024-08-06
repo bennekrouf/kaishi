@@ -1,0 +1,18 @@
+
+syntax = "proto3";
+
+package matching;
+
+service MatchingService {
+    rpc AnalyzeText (stream AnalyzeTextRequest) returns (stream AnalyzeTextReply);
+}
+
+message AnalyzeTextRequest {
+    string query_sentence = 1;
+    string additional_info = 2;
+}
+
+message AnalyzeTextReply {
+    string result = 1;
+    bool requires_more_info = 2;
+}

@@ -1,0 +1,18 @@
+
+syntax = "proto3";
+
+package log;
+
+service LogService {
+    rpc StreamLogs (LogRequest) returns (stream LogReply);
+}
+
+message LogRequest {
+    string filter = 1;
+}
+
+message LogReply {
+    string log_message = 1;
+}
+
+
