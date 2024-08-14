@@ -2,7 +2,7 @@
 use tonic::{Request, transport::Endpoint};
 use generated::log_service_client::LogServiceClient;
 use generated::matching_service_client::MatchingServiceClient;
-use generated::{LogRequest, AnalyzeTextRequest};
+use generated::{LogRequest, LogFilter, AnalyzeTextRequest};
 use tokio_stream::iter;
 use dialoguer::{Input, Select};
 
@@ -17,19 +17,15 @@ async fn process_analysis_request(client: &mut MatchingServiceClient<tonic::tran
         additional_info: "".into(), // Fill as needed
     };
 
-    // Create a stream of AnalyzeTextRequest items
     let analyze_stream = iter(vec![analyze_request]);
 
-    // Wrap the stream in a Request
     let request = Request::new(analyze_stream);
 
-    // Send the request and receive a stream of AnalyzeTextReply
     let matching_response = client.analyze_text(request).await?;
     let mut matching_stream = matching_response.into_inner();
 
-    // Process the MatchingService stream
     while let Some(message) = matching_stream.message().await? {
-        println!("[Client] Received matching response: {}", message.result);
+        println!("[Client] {}", message.result);
         println!("[Client] Requires more info: {}", message.requires_more_info);
     }
 
@@ -38,23 +34,33 @@ async fn process_analysis_request(client: &mut MatchingServiceClient<tonic::tran
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Create an endpoint with keep-alive settings
-    let endpoint = Endpoint::from_static("http://0.0.0.0:50052")
+    // Create an endpoint for the LogService
+    println!("Connecting to LogService at http://0.0.0.0:50052");
+    let log_endpoint = Endpoint::from_static("http://0.0.0.0:50052")
         .keep_alive_while_idle(true)
         .keep_alive_timeout(std::time::Duration::from_secs(200000))
         .timeout(std::time::Duration::from_secs(60));
 
-    // Establish a single connection to the gRPC server
-    let channel = endpoint.connect().await?;
+    // Create a separate endpoint for the MatchingService
+    println!("Connecting to MatchingService at http://0.0.0.0:50053");
+    let matching_endpoint = Endpoint::from_static("http://0.0.0.0:50053")
+        .keep_alive_while_idle(true)
+        .keep_alive_timeout(std::time::Duration::from_secs(200000))
+        .timeout(std::time::Duration::from_secs(60));
 
-    // Create clients using the same connection
-    let mut log_client = LogServiceClient::new(channel.clone());
-    let mut matching_client = MatchingServiceClient::new(channel);
+    // Establish connections to each service
+    let log_channel = log_endpoint.connect().await?;
+    let matching_channel = matching_endpoint.connect().await?;
+
+    // Create clients for each service
+    let mut log_client = LogServiceClient::new(log_channel);
+    let mut matching_client = MatchingServiceClient::new(matching_channel);
 
     // 1. Handle LogService request
-    let log_request = Request::new(LogRequest {
-        filter: "info".into(),
-    });
+    let log_filter = LogFilter {
+        tag: "info".into(),  // Specify the tag you want to filter on
+    };
+    let log_request = Request::new(log_filter);
 
     let log_response = log_client.stream_logs(log_request).await?;
     let mut log_stream = log_response.into_inner();
@@ -62,7 +68,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Process the LogService stream
     tokio::spawn(async move {
         while let Some(message) = log_stream.message().await.unwrap() {
-            println!("[Client] Received log message: {}", message.log_message);
+            println!("[Client] Tag: {}, Message: {}", message.tag, message.log_message);
         }
     });
 
@@ -77,17 +83,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "Input a sentence".to_string(),
                 "Exit".to_string(),
             ])
-            .default(0) // Default to "Run with default sentence"
+            .default(0)
             .interact()?;
 
         match selection {
             0 => {
-                // Run with the default sentence
-                
                 process_analysis_request(&mut matching_client, default_sentence).await?;
             },
             1 => {
-                // Input a sentence
                 let query_sentence: String = Input::new()
                     .with_prompt("Enter a sentence to analyze:")
                     .interact_text()?;
