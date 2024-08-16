@@ -1,13 +1,13 @@
 
 use tonic::{Request, transport::Endpoint};
-use generated::log_service_client::LogServiceClient;
+use generated::messenger_service_client::MessengerServiceClient;
 use generated::matching_service_client::MatchingServiceClient;
-use generated::{LogRequest, LogFilter, AnalyzeTextRequest};
+use generated::{MessageFilter, AnalyzeTextRequest};
 use tokio_stream::iter;
 use dialoguer::{Input, Select};
 
 pub mod generated {
-    include!(concat!(env!("OUT_DIR"), "/log.rs"));
+    include!(concat!(env!("OUT_DIR"), "/messenger.rs"));  // Use the correct proto file for MessengerService
     include!(concat!(env!("OUT_DIR"), "/matching.rs"));
 }
 
@@ -34,9 +34,9 @@ async fn process_analysis_request(client: &mut MatchingServiceClient<tonic::tran
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Create an endpoint for the LogService
-    println!("Connecting to LogService at http://0.0.0.0:50052");
-    let log_endpoint = Endpoint::from_static("http://0.0.0.0:50052")
+    // Create an endpoint for the MessengerService
+    println!("Connecting to MessengerService at http://0.0.0.0:50052");
+    let messenger_endpoint = Endpoint::from_static("http://0.0.0.0:50052")
         .keep_alive_while_idle(true)
         .keep_alive_timeout(std::time::Duration::from_secs(200000))
         .timeout(std::time::Duration::from_secs(60));
@@ -49,26 +49,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .timeout(std::time::Duration::from_secs(60));
 
     // Establish connections to each service
-    let log_channel = log_endpoint.connect().await?;
+    let messenger_channel = messenger_endpoint.connect().await?;
     let matching_channel = matching_endpoint.connect().await?;
 
     // Create clients for each service
-    let mut log_client = LogServiceClient::new(log_channel);
+    let mut messenger_client = MessengerServiceClient::new(messenger_channel);
     let mut matching_client = MatchingServiceClient::new(matching_channel);
 
-    // 1. Handle LogService request
-    let log_filter = LogFilter {
-        tag: "info".into(),  // Specify the tag you want to filter on
+    // 1. Handle MessengerService request
+    let message_filter = MessageFilter {
+        tags: vec!["info".to_string()],  // Specify the tags you want to filter on
     };
-    let log_request = Request::new(log_filter);
+    let filter_request = Request::new(message_filter);
 
-    let log_response = log_client.stream_logs(log_request).await?;
-    let mut log_stream = log_response.into_inner();
+    let message_response = messenger_client.subscribe_messages(filter_request).await?;
+    let mut message_stream = message_response.into_inner();
 
-    // Process the LogService stream
+    // Process the MessengerService stream
     tokio::spawn(async move {
-        while let Some(message) = log_stream.message().await.unwrap() {
-            println!("[Client] Tag: {}, Message: {}", message.tag, message.log_message);
+        while let Some(message) = message_stream.message().await.unwrap() {
+            println!("Received message: {}", message.message_text);
         }
     });
 
@@ -107,4 +107,3 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
-

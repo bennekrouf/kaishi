@@ -5,7 +5,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     tonic_build::configure()
         .out_dir(&out_dir)
         .compile(
-            &["proto-definitions/proto/log/log.proto", "proto-definitions/proto/matcher/matching.proto"], // Path to your .proto files
+            &["proto-definitions/messenger/messenger.proto", "proto-definitions/matcher/matching.proto"],
             &["proto"],           // Include path
         )?;
     Ok(())

@@ -10,7 +10,8 @@ prost = "0.13.1"
 tokio = { version = "1.39.2", features = ["full"] }
 tokio-stream = "0.1.15"
 tonic = "0.12.1"
-
+messenger-client = { path = "libs/messenger-client" }
 
 [build-dependencies]
 tonic-build = "0.12.1"
+
