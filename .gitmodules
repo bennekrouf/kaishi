@@ -1,3 +1,6 @@
 [submodule "proto-definitions"]
 	path = proto-definitions
 	url = git@192.95.30.129:backend/proto-definitions.git
+[submodule "libs/messenger_client"]
+	path = libs/messenger_client
+	url = git@192.95.30.129:backend/messenger-client.git
