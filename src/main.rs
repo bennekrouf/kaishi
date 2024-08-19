@@ -1,15 +1,19 @@
+mod publish;
+
+use messenger_client::generated;
 
 use tonic::{Request, transport::Endpoint};
-use generated::messenger_service_client::MessengerServiceClient;
-use generated::matching_service_client::MatchingServiceClient;
-use generated::{MessageFilter, AnalyzeTextRequest};
+// use crate::generated::messenger_service_client::MessengerServiceClient;
+// use rs_client::generated::matching_service_client::MatchingServiceClient;
+// use rs_client::generated::{MessageFilter, AnalyzeTextRequest};
+
+use crate::generated::messenger_service_client::MessengerServiceClient;
+use crate::generated::matching_service_client::MatchingServiceClient;
+use crate::generated::{MessageFilter, AnalyzeTextRequest};
+
 use tokio_stream::iter;
 use dialoguer::{Input, Select};
-
-pub mod generated {
-    include!(concat!(env!("OUT_DIR"), "/messenger.rs"));  // Use the correct proto file for MessengerService
-    include!(concat!(env!("OUT_DIR"), "/matching.rs"));
-}
+use crate::publish::send_message;
 
 async fn process_analysis_request(client: &mut MatchingServiceClient<tonic::transport::Channel>, query_sentence: String) -> Result<(), Box<dyn std::error::Error>> {
     let analyze_request = AnalyzeTextRequest {
@@ -58,7 +62,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 1. Handle MessengerService request
     let message_filter = MessageFilter {
-        tags: vec!["info".to_string()],  // Specify the tags you want to filter on
+        tags: vec!["matcher".to_string()],  // Specify the tags you want to filter on
     };
     let filter_request = Request::new(message_filter);
 
@@ -81,6 +85,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .items(&[
                 select_option_text,
                 "Input a sentence".to_string(),
+                "Send a message".to_string(),  // New option for sending a message
                 "Exit".to_string(),
             ])
             .default(0)
@@ -98,6 +103,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 process_analysis_request(&mut matching_client, query_sentence).await?;
             },
             2 => {
+                // Call the new send_message function
+                send_message(&mut messenger_client).await?;
+            },
+            3 => {
                 println!("Exiting...");
                 break;
             },
@@ -107,3 +116,4 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+
