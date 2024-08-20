@@ -14,16 +14,18 @@ use crate::process_analysis_request::process_analysis_request;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv().ok();
+    let _matching_socket = env::var("MATCHING_SOCKET")?;
 
+    let addr:String = env::var("MATCHING_ADDR")?.parse()?;
     // Create a separate endpoint for the MatchingService
-    println!("Connecting to MatchingService at http://0.0.0.0:50053");
-    let matching_endpoint = Endpoint::from_static("http://0.0.0.0:50053")
-        .keep_alive_while_idle(true)
-        .keep_alive_timeout(std::time::Duration::from_secs(200000))
-        .timeout(std::time::Duration::from_secs(60));
+    println!("Connecting to MatchingService at :{}", addr);
+    let matching_endpoint = Endpoint::from_shared(addr);
+        // .keep_alive_while_idle(true)
+        // .keep_alive_timeout(std::time::Duration::from_secs(200000))
+        // .timeout(std::time::Duration::from_secs(60));
 
-    // let matching_channel = matching_endpoint.connect().await?;
-    // let mut matching_client = MatchingServiceClient::new(matching_channel);
+    let matching_channel = matching_endpoint.expect("REASON").connect().await?;
+    let mut matching_client = MatchingServiceClient::new(matching_channel);
 
     // --- -----  Messenger ---------------
     let messenger_tag = env::var("MESSENGER_TAG")?;
@@ -59,16 +61,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .interact()?;
 
         match selection {
-            // 0 => {
-            //     process_analysis_request(&mut matching_client, default_sentence).await?;
-            // },
-            // 1 => {
-            //     let query_sentence: String = Input::new()
-            //         .with_prompt("Enter a sentence to analyze:")
-            //         .interact_text()?;
-            //
-            //     process_analysis_request(&mut matching_client, query_sentence).await?;
-            // },
+            0 => {
+                process_analysis_request(&mut matching_client, default_sentence).await?;
+            },
+            1 => {
+                let query_sentence: String = Input::new()
+                    .with_prompt("Enter a sentence to analyze:")
+                    .interact_text()?;
+
+                process_analysis_request(&mut matching_client, query_sentence).await?;
+            },
             2 => {
                 let query_sentence: String = Input::new()
                     .with_prompt("Enter a message to matcher:")
