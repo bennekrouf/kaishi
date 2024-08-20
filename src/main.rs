@@ -1,49 +1,19 @@
 mod publish;
+mod messenger_client;
+mod process_analysis_request;
 
-use messenger_client::generated;
-
-use tonic::{Request, transport::Endpoint};
-// use crate::generated::messenger_service_client::MessengerServiceClient;
-// use rs_client::generated::matching_service_client::MatchingServiceClient;
-// use rs_client::generated::{MessageFilter, AnalyzeTextRequest};
-
-use crate::generated::messenger_service_client::MessengerServiceClient;
-use crate::generated::matching_service_client::MatchingServiceClient;
-use crate::generated::{MessageFilter, AnalyzeTextRequest};
-
-use tokio_stream::iter;
+use tonic::transport::Endpoint;
+use std::sync::Arc;
+use dotenv::dotenv;
+use std::env;
+use kaishi::generated::matching_service_client::MatchingServiceClient;
+use messenger_client::{connect::connect_to_messenger_service, models::MessagingService};
 use dialoguer::{Input, Select};
-use crate::publish::send_message;
-
-async fn process_analysis_request(client: &mut MatchingServiceClient<tonic::transport::Channel>, query_sentence: String) -> Result<(), Box<dyn std::error::Error>> {
-    let analyze_request = AnalyzeTextRequest {
-        query_sentence,
-        additional_info: "".into(), // Fill as needed
-    };
-
-    let analyze_stream = iter(vec![analyze_request]);
-
-    let request = Request::new(analyze_stream);
-
-    let matching_response = client.analyze_text(request).await?;
-    let mut matching_stream = matching_response.into_inner();
-
-    while let Some(message) = matching_stream.message().await? {
-        println!("[Client] {}", message.result);
-        println!("[Client] Requires more info: {}", message.requires_more_info);
-    }
-
-    Ok(())
-}
-
+use crate::process_analysis_request::process_analysis_request;
+ 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Create an endpoint for the MessengerService
-    println!("Connecting to MessengerService at http://0.0.0.0:50052");
-    let messenger_endpoint = Endpoint::from_static("http://0.0.0.0:50052")
-        .keep_alive_while_idle(true)
-        .keep_alive_timeout(std::time::Duration::from_secs(200000))
-        .timeout(std::time::Duration::from_secs(60));
+    dotenv().ok();
 
     // Create a separate endpoint for the MatchingService
     println!("Connecting to MatchingService at http://0.0.0.0:50053");
@@ -52,30 +22,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .keep_alive_timeout(std::time::Duration::from_secs(200000))
         .timeout(std::time::Duration::from_secs(60));
 
-    // Establish connections to each service
-    let messenger_channel = messenger_endpoint.connect().await?;
-    let matching_channel = matching_endpoint.connect().await?;
+    // let matching_channel = matching_endpoint.connect().await?;
+    // let mut matching_client = MatchingServiceClient::new(matching_channel);
 
-    // Create clients for each service
-    let mut messenger_client = MessengerServiceClient::new(messenger_channel);
-    let mut matching_client = MatchingServiceClient::new(matching_channel);
-
-    // 1. Handle MessengerService request
-    let message_filter = MessageFilter {
-        tags: vec!["matcher".to_string()],  // Specify the tags you want to filter on
-    };
-    let filter_request = Request::new(message_filter);
-
-    let message_response = messenger_client.subscribe_messages(filter_request).await?;
-    let mut message_stream = message_response.into_inner();
-
-    // Process the MessengerService stream
-    tokio::spawn(async move {
-        while let Some(message) = message_stream.message().await.unwrap() {
-            println!("Received message: {}", message.message_text);
+    // --- -----  Messenger ---------------
+    let messenger_tag = env::var("MESSENGER_TAG")?;
+    // Attempt to connect to MessengerService
+    let messenger_client = match connect_to_messenger_service().await {
+        Some(client) => Arc::new(tokio::sync::Mutex::new(client)),
+        None => {
+            eprintln!("Failed to connect to MessengerService.");
+            return Ok(());
         }
-    });
+    };
 
+    let messaging_service = Arc::new(MessagingService::new(messenger_client, messenger_tag.clone()));
+    let messaging_service_clone = Arc::clone(&messaging_service);
+
+    messaging_service.publish_message("Hey c'est moi Client !!!".to_string(), Some(vec!["client".to_string()])).await;
+    tokio::spawn(async move {
+        messaging_service_clone.subscribe_messages(vec!["matcher".to_string()]).await;
+    });
     // 2. Menu loop
     loop {
         let default_sentence = "Send 2 laptops to John Mackenzie".to_string();
@@ -88,23 +55,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "Send a message".to_string(),  // New option for sending a message
                 "Exit".to_string(),
             ])
-            .default(0)
+            // .default(0)
             .interact()?;
 
         match selection {
-            0 => {
-                process_analysis_request(&mut matching_client, default_sentence).await?;
-            },
-            1 => {
-                let query_sentence: String = Input::new()
-                    .with_prompt("Enter a sentence to analyze:")
-                    .interact_text()?;
-
-                process_analysis_request(&mut matching_client, query_sentence).await?;
-            },
+            // 0 => {
+            //     process_analysis_request(&mut matching_client, default_sentence).await?;
+            // },
+            // 1 => {
+            //     let query_sentence: String = Input::new()
+            //         .with_prompt("Enter a sentence to analyze:")
+            //         .interact_text()?;
+            //
+            //     process_analysis_request(&mut matching_client, query_sentence).await?;
+            // },
             2 => {
-                // Call the new send_message function
-                send_message(&mut messenger_client).await?;
+                let query_sentence: String = Input::new()
+                    .with_prompt("Enter a message to matcher:")
+                    .interact_text()?;
+                    messaging_service.publish_message(query_sentence, Some(vec!["matcher".to_string()])).await;
             },
             3 => {
                 println!("Exiting...");

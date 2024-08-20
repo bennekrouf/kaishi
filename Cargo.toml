@@ -1,16 +1,17 @@
 [package]
-name = "rs-client"
+name = "kaishi"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 dialoguer = "0.11.0"
+dotenv = "0.15.0"
 futures-util = "0.3.30"
 prost = "0.13.1"
+serde = "1.0.208"
 tokio = { version = "1.39.2", features = ["full"] }
 tokio-stream = "0.1.15"
 tonic = "0.12.1"
-messenger-client = { path = "libs/messenger-client" }
 
 [build-dependencies]
 tonic-build = "0.12.1"
