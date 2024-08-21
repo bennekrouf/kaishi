@@ -4,7 +4,8 @@ use kaishi::generated::MessageRequest;
 use tonic::Request;
 
 impl MessagingService {
-    pub async fn publish_message(&self, message: String, tags: Option<Vec<String>>) {
+    pub async fn publish_message(&self, message: String, tags: Option<Vec<String>>) 
+    -> Result<(), Box<dyn std::error::Error>>{
         let message_request = MessageRequest {
             message_text: message,
             tags: tags.unwrap_or_else(|| vec![self.tag.clone()]),
@@ -14,7 +15,9 @@ impl MessagingService {
         let mut client = self.client.lock().await;
         if let Err(e) = client.publish_message(Request::new(message_request)).await {
             println!("Failed to publish message: {:?}", e);
+            return Err(Box::new(e));
         }
+        Ok(())
     }
 }
 
