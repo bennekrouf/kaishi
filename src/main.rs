@@ -1,8 +1,8 @@
-mod publish;
 mod messenger_client;
 mod process_analysis_request;
 mod display_menu;
 
+use tokio::sync::watch;
 use futures_util::FutureExt;
 use tonic::transport::Endpoint;
 use std::sync::Arc;
@@ -40,14 +40,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let messaging_service_clone = Arc::clone(&messaging_service);
 
     let _ = messaging_service.publish_message("Hey c'est moi Client !!!".to_string(), Some(vec!["client".to_string()])).await;
-    tokio::spawn(async move {
-        messaging_service_clone.subscribe_messages(vec!["matcher".to_string()]).await;
+
+    // Set up a watch channel to notify when the subscription task ends
+    let (tx, mut rx) = watch::channel(());
+
+    // Spawn the subscription task in the background
+    let _subscription_task = tokio::spawn(async move {
+        messaging_service_clone.subscribe_messages(vec!["toto".to_string()]).await;
+        let _ = tx.send(());
     });
+
+    // let subscription_task = tokio::spawn(async move {
+    //     messaging_service_clone.subscribe_messages(vec!["matcher".to_string()]).await;
+    // });
     loop {
         tokio::select! {
             _ = display_menu_and_process_user_input(&mut matching_client, &messaging_service).fuse() => {
+                // Handle user input
+            },
+            _ = rx.changed() => {
+                // If the subscription task ends, break the loop
+                println!("Subscription task ended.");
+                break;
             },
         }
     }
+    // subscription_task.await??;
+    Ok(())
 }
 

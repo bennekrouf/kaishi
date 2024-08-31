@@ -1,8 +1,6 @@
 
 use std::sync::Arc;
 use tokio::sync::Mutex;
-// use serde::{Deserialize, Deserializer, Serialize};
-// use std::fmt;
 
 use kaishi::generated::messenger_service_client::MessengerServiceClient;
 
