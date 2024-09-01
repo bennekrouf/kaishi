@@ -6,7 +6,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .out_dir(&out_dir)
         .compile(
             &["proto-definitions/messenger/messenger.proto", "proto-definitions/matcher/matching.proto"],
-            &["proto"],           // Include path
+            &["proto"],
         )?;
     Ok(())
 }

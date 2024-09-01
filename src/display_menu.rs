@@ -1,6 +1,8 @@
 
 use kaishi::generated::matching_service_client::MatchingServiceClient;
-use crate::messenger_client::models::MessagingService;
+// use messenger_client::{connect::connect_to_messenger_service, models::MessagingService};
+use messengerc::MessagingService;
+
 use dialoguer::{Input, Select};
 use crate::process_analysis_request::process_analysis_request;
  

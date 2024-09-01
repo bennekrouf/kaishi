@@ -5,13 +5,14 @@ edition = "2021"
 
 [dependencies]
 dialoguer = "0.11.0"
-dotenv = "0.15.0"
 futures-util = "0.3.30"
-prost = "0.13.1"
+prost = "0.13.2"
 serde = "1.0.208"
 tokio = { version = "1.39.2", features = ["full"] }
 tokio-stream = "0.1.15"
 tonic = "0.12.1"
+messengerc = { git = "https://github.com/bennekrouf/messengerc.git" }
+dotenvy = "0.15.7"
 
 [build-dependencies]
 tonic-build = "0.12.1"

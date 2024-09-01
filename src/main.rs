@@ -1,54 +1,63 @@
-mod messenger_client;
+// mod messenger_client;
 mod process_analysis_request;
 mod display_menu;
 
 use tokio::sync::watch;
 use futures_util::FutureExt;
 use tonic::transport::Endpoint;
+
 use std::sync::Arc;
-use dotenv::dotenv;
+use tokio::sync::Mutex;
+
 use std::env;
+use dotenvy::from_path;
+use std::path::Path;
 use kaishi::generated::matching_service_client::MatchingServiceClient;
-use messenger_client::{connect::connect_to_messenger_service, models::MessagingService};
+use messengerc::{connect_to_messenger_service, MessagingService};
 use crate::display_menu::display_menu_and_process_user_input;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    dotenv().ok();
+    // Load the environment variables from a custom file
+    let custom_env_path = Path::new("proto-definitions/.service");
+    from_path(custom_env_path).expect("Failed to load environment variables from custom path");
+
     let _matching_socket = env::var("MATCHING_SOCKET")?;
 
     let addr:String = env::var("MATCHING_ADDR")?.parse()?;
     // Create a separate endpoint for the MatchingService
-    println!("Connecting to MatchingService at :{}", addr);
-    let matching_endpoint = Endpoint::from_shared(addr);
+    println!("Connecting to MatchingService at :{}", &addr);
+    let matching_endpoint = Endpoint::from_shared(addr.clone());
 
     let matching_channel = matching_endpoint.expect("REASON").connect().await?;
     let mut matching_client = MatchingServiceClient::new(matching_channel);
 
     // --- -----  Messenger ---------------
     let messenger_tag = env::var("MESSENGER_TAG")?;
-    // Attempt to connect to MessengerService
-    let messenger_client = match connect_to_messenger_service().await {
-        Some(client) => Arc::new(tokio::sync::Mutex::new(client)),
-        None => {
-            eprintln!("Failed to connect to MessengerService.");
-            return Ok(());
-        }
-    };
 
-    let messaging_service = Arc::new(MessagingService::new(messenger_client, messenger_tag.clone()));
-    let messaging_service_clone = Arc::clone(&messaging_service);
+    // Create and initialize the gRPC client for the messaging service
+    let messenger_client = connect_to_messenger_service().await
+        .ok_or("Failed to connect to messenger service")?;
 
-    let _ = messaging_service.publish_message("Hey c'est moi Client !!!".to_string(), Some(vec!["client".to_string()])).await;
+    let messaging_service = MessagingService::new(
+        Arc::new(Mutex::new(messenger_client)),
+        "kaishi".to_string(),
+    );
+
+    // Publish a message through the messaging service
+    let message = format!("KaishiService server listening on {}", addr);
+    if let Err(e) = messaging_service.publish_message(message.clone(), None).await {
+        eprintln!("Failed to publish message: {:?}", e);
+    }
 
     // Set up a watch channel to notify when the subscription task ends
     let (tx, mut rx) = watch::channel(());
 
     // Spawn the subscription task in the background
-    let _subscription_task = tokio::spawn(async move {
-        messaging_service_clone.subscribe_messages(vec!["toto".to_string()]).await;
-        let _ = tx.send(());
-    });
+    // let _subscription_task = tokio::spawn(async move {
+    //     messaging_service_clone.subscribe_messages(vec!["toto".to_string()]).await;
+    //     let _ = tx.send(());
+    // });
 
     // let subscription_task = tokio::spawn(async move {
     //     messaging_service_clone.subscribe_messages(vec!["matcher".to_string()]).await;
